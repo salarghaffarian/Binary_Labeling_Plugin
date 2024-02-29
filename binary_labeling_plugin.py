@@ -73,8 +73,17 @@ class BinaryLabelingPlugin:
         self.action_group.addAction(self.action_button2)
 
         # (5) Connect the action buttons to their respective methods
-        # Note: The action buttons clicks just change the status of the label to assign. The actual assignment is done when the user clicks on the map canvas.
-        # So, we don't need to connect the action buttons to some method. We just need to connect the map canvas click to a method that does the assignment.
+        self.action_button1.triggered.connect(self.toggle_action_button)
+        self.action_button2.triggered.connect(self.toggle_action_button)
+    
+    def toggle_action_button(self):
+        # Get the action button that triggered the signal
+        action_button = self.sender()
+
+        # Check if the action button is currently checked
+        if action_button.isChecked():
+            # If it is, uncheck it
+            action_button.setChecked(False)
 
     def layer_combo_update(self):
         # Clear the layer combo box
@@ -128,17 +137,18 @@ class BinaryLabelingPlugin:
         self.menu_layout = QVBoxLayout(self.settings_menu)
         self.menu_layout.addWidget(self.group_box)
         self.settings_menu.setLayout(self.menu_layout)
-        
-
+    
     def field_combo_populate(self):
         # Clear the field combo box
         self.field_combo.clear()
 
-        # Get the selected layer
-        selected_layer = self.iface.mapCanvas().layers()[self.layer_combo.currentIndex()]
+        # Check if there is a valid selection in the layer_combo
+        if self.layer_combo.currentIndex() >= 0:
+            # Get the selected layer
+            selected_layer = self.iface.mapCanvas().layers()[self.layer_combo.currentIndex()]
 
-        # Add the field names to the field combo box (self.field_combo)
-        self.field_combo.addItems([field.name() for field in selected_layer.fields()])
+            # Add the field names to the field combo box (self.field_combo)
+            self.field_combo.addItems([field.name() for field in selected_layer.fields()])
 
     def unload(self):
         self.iface.mainWindow().removeToolBar(self.toolbar)
