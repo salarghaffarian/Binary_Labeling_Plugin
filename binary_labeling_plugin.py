@@ -2,7 +2,8 @@
 import os 
 from qgis.PyQt.QtWidgets import QToolBar, QToolButton, QAction, QActionGroup, QMenu, QGroupBox, QLabel, QComboBox, QHBoxLayout, QVBoxLayout
 from qgis.PyQt.QtGui import QIcon
-
+from qgis.core import QgsMessageLog
+from qgis.PyQt.QtCore import Qt
 
 
 # Plugin:
@@ -55,35 +56,55 @@ class BinaryLabelingPlugin:
         self.iface.addToolBar(self.toolbar)
 
     def create_action_buttons(self):
-        # (1) Create an action group object
-        self.action_group = QActionGroup(self.iface.mainWindow())
-        self.action_group.setExclusive(True)    # Make the action group exclusive, so only one of the action buttons can be checked at a time.
-
-        # (2) Create the action buttons objects
+        # (1) Create the action buttons objects
         self.action_button1 = QAction(QIcon(self.label_1_icon_path), "Assign 1 (Key: Y)", self.iface.mainWindow())
         self.action_button2 = QAction(QIcon(self.label_0_icon_path), "Assign 0 (Key: N)", self.iface.mainWindow())
         # TODO: Add shortcuts to the action buttons   <<<<<<< Attention >>>>>>      <<<<<<< Attention >>>>>>      <<<<<<< Attention >>>>>>     <<<<<<< Attention >>>>>>   <<<<<<< Attention >>>>>>     <<<<<<< Attention >>>>>>    <<<<<<< Attention >>>>>>     <<<<<<< Attention >>>>>>
 
-        # (3) Make the action buttons checkable
+        # (2) Make the action buttons checkable
         self.action_button1.setCheckable(True)
         self.action_button2.setCheckable(True)
 
-        # (4) Add the action buttons to the action group
-        self.action_group.addAction(self.action_button1)
-        self.action_group.addAction(self.action_button2)
-
-        # (5) Connect the action buttons to their respective methods
-        self.action_button1.triggered.connect(self.toggle_action_button)
-        self.action_button2.triggered.connect(self.toggle_action_button)
+        # (3) Connect the action buttons to their respective methods
+        self.action_button1.triggered.connect(self.on_action_button1_triggered)
+        self.action_button2.triggered.connect(self.on_action_button2_triggered)
     
-    def toggle_action_button(self):
-        # Get the action button that triggered the signal
-        action_button = self.sender()
+    def on_action_button1_triggered(self):
+        if self.action_button2.isChecked():
+            self.action_button2.setChecked(False)
+        
+        # Set the cursor to cross cursor if one of the action buttons is checked, otherwise set it to arrow cursor
+        if self.action_button1.isChecked() or self.action_button2.isChecked():
+            self.map_canvas.setCursor(Qt.CrossCursor)
+            self.deactivate_other_toolbar_buttons()
 
-        # Check if the action button is currently checked
-        if action_button.isChecked():
-            # If it is, uncheck it
-            action_button.setChecked(False)
+        if not self.action_button1.isChecked() and not self.action_button2.isChecked():
+            self.map_canvas.setCursor(Qt.ArrowCursor)
+
+    def on_action_button2_triggered(self):
+        if self.action_button1.isChecked():
+            self.action_button1.setChecked(False)
+
+        # Set the cursor to cross cursor if one of the action buttons is checked, otherwise set it to arrow cursor
+        if self.action_button1.isChecked() or self.action_button2.isChecked():
+            self.map_canvas.setCursor(Qt.CrossCursor)
+            self.deactivate_other_toolbar_buttons()
+
+        if not self.action_button1.isChecked() and not self.action_button2.isChecked():
+            self.map_canvas.setCursor(Qt.ArrowCursor)
+    
+    def deactivate_other_toolbar_buttons(self):
+        # List of action object names to exclude
+        exclude_actions = ['mActionToggleEditing', 'toolboxAction', 'mActionShowPythonDialog']
+
+        for toolbar in self.iface.mainWindow().findChildren(QToolBar):
+            if toolbar != self.toolbar:  # Skip your own toolbar
+                for action in toolbar.actions():
+                    # Only deactivate the action if it's not in the exclude list
+                    if action.isCheckable() and action.isChecked():
+                        if action.objectName() not in exclude_actions:
+                            action.setChecked(False)
+        
 
     def layer_combo_update(self):
         # Clear the layer combo box
@@ -137,6 +158,7 @@ class BinaryLabelingPlugin:
         self.menu_layout = QVBoxLayout(self.settings_menu)
         self.menu_layout.addWidget(self.group_box)
         self.settings_menu.setLayout(self.menu_layout)
+        
     
     def field_combo_populate(self):
         # Clear the field combo box
