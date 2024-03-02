@@ -2,8 +2,10 @@
 import os 
 from qgis.PyQt.QtWidgets import QToolBar, QToolButton, QAction, QActionGroup, QMenu, QGroupBox, QLabel, QComboBox, QHBoxLayout, QVBoxLayout
 from qgis.PyQt.QtGui import QIcon
-from qgis.core import QgsMessageLog
-from qgis.PyQt.QtCore import Qt
+from qgis.core import QgsMessageLog, Qgis, QgsPointXY, QgsFeatureRequest, QgsRectangle
+from qgis.PyQt.QtCore import Qt, QPoint
+from qgis.gui import QgsMapToolEmitPoint, QgsMapTool, QgsMapToolIdentify, QgsMapToolIdentifyFeature
+
 
 
 # Plugin:
@@ -13,8 +15,13 @@ class BinaryLabelingPlugin:
         self.iface = iface
         self.active_button = None
         self.map_canvas = self.iface.mapCanvas()  # Get a reference to the map canvas
+        self.tool = QgsMapToolEmitPoint(self.map_canvas)
+        self.tool.canvasClicked.connect(self.handle_canvas_click)
 
     def initGui(self):
+        # Set the map tool when the plugin is loaded
+        self.map_canvas.setMapTool(self.tool)
+
         # Create toolbar
         self.toolbar = QToolBar("Binary Labeling Toolbar")
         self.toolbar.setObjectName("Binary Labeling Toolbar")
@@ -171,12 +178,142 @@ class BinaryLabelingPlugin:
 
             # Add the field names to the field combo box (self.field_combo)
             self.field_combo.addItems([field.name() for field in selected_layer.fields()])
+    
+
+                        
+    def handle_canvas_click(self, point, button):
+        # TODO: Add a messgeBar to push the message for the time that the mouse is clicked not on a feature.
+        # test station:
+        if self.action_button1.isChecked() and button == Qt.LeftButton:                              # if the action_button1 is checked and the left mouse button is clicked
+            label = 1
+            # Get the layer and field names from the comboboxes
+            selected_layer, selected_field = self.get_layer_and_field()                              # Get layer and field
+
+            if selected_layer and selected_field:                                                    # Validate the layer and field names not to be None
+                
+                if selected_layer.fields().field(selected_field).type() == 4:                        # Check if the field is of type integer
+                    
+                    if selected_layer.isEditable():                                                  # Check if the layer is in editing mode
+                        print("Layer is in editing mode.")
+                        rect = QgsRectangle(point.x() -1 , point.y() -1, point.x() + 1, point.y() + 1)
+                        request = QgsFeatureRequest().setFilterRect(rect)
+                        features = selected_layer.getFeatures(request)
+                        
+                        # Check if any features were identified
+                        if features:
+                            # Get the first identified feature
+                            feature = list(features)[0]
+                            feature[selected_field] = label        # Change the value of the selected field with the label value
+                            selected_layer.updateFeature(feature)  # Update the feature in the layer
+                            selected_layer.commitChanges()         # Commit the changes to the layer
+                            selected_layer.startEditing()          # Start editing the layer
+                            print(f"Feature with id: {feature.id()} has been updated with the value: {label} in the field: {selected_field}.")
+                        else:
+                            self.iface.messageBar().pushMessage("No feature found", "No feature was found at the clicked point.", level=Qgis.Warning)
+                    elif not selected_layer.isEditable():
+                        self.iface.messageBar().pushMessage("Editing mode is off", f"The selected layer is not in editing mode. Please enable the editing mode for the selected layer={selected_layer}.", level=Qgis.Warning)
+
+        elif self.action_button2.isChecked() and button == Qt.LeftButton:
+            label = 0
+            # Get the layer and field names from the comboboxes
+            selected_layer, selected_field = self.get_layer_and_field()                              # Get layer and field
+
+            if selected_layer and selected_field:                                                    # Validate the layer and field names not to be None
+
+                if selected_layer.fields().field(selected_field).type() == 4:                        # Check if the field is of type integer
+
+                    if selected_layer.isEditable():                                                  # Check if the layer is in editing mode
+                        print("Layer is in editing mode.")
+                        rect = QgsRectangle(point.x() -1 , point.y() -1, point.x() + 1, point.y() + 1)
+                        request = QgsFeatureRequest().setFilterRect(rect)
+                        features = selected_layer.getFeatures(request)
+                        
+                        # Check if any features were identified
+                        if features:
+                            # Get the first identified feature
+                            feature = list(features)[0]
+                            feature[selected_field] = label        # Change the value of the selected field with the label value
+                            selected_layer.updateFeature(feature)  # Update the feature in the layer
+                            selected_layer.commitChanges()         # Commit the changes to the layer
+                            selected_layer.startEditing()          # Start editing the layer
+                            print(f"Feature with id: {feature.id()} has been updated with the value: {label} in the field: {selected_field}.")
+                        else:
+                            self.iface.messageBar().pushMessage("No feature found", "No feature was found at the clicked point.", level=Qgis.Warning)
+                    
+                    elif not selected_layer.isEditable():
+                        self.iface.messageBar().pushMessage("Editing mode is off", f"The selected layer is not in editing mode. Please enable the editing mode for the selected layer={selected_layer}.", level=Qgis.Warning)
+
+
+                        
+
+        # # (0) Checks if one of the action buttons is checked and get the label value accordingly
+        # if self.action_button1.isChecked() and button == Qt.LeftButton:
+        #     label = 1
+
+        # elif self.action_button2.isChecked() and button == Qt.LeftButton:
+        #     label = 0
+
+        # # (1) Get the selected layer and the select field from the comboboxes. Also check if the selected layer and field are valid and selected.
+        # selected_layer, selected_field = self.get_layer_and_field()
+
+        # # (2) Check if the selected field from the selected layer is from a datatype as integer.
+        # self.check_field_type(selected_layer, selected_field)
+        
+        # # (3) Get the features that intersect with the clicked point
+        # features = selected_layer.getFeatures(self.map_canvas.getCoordinateTransform().toMapCoordinates(point.x(), point.y()))
+
+        # # (4) Check if the Toggle Editing mode is enabled for the selected layer. Retrun a message if not.
+        # self.check_editing_mode(selected_layer)
+
+        # # (5) Update the selected field with the label value
+        # for feature in features:
+        #     selected_layer.startEditing()
+        #     feature[selected_field] = label
+        #     selected_layer.updateFeature(feature)
+        #     selected_layer.commitChanges()
+        #     print(f"Feature with id: {feature.id()} has been updated with the value: {label} in the field: {selected_field}.")
+
+
+    def get_layer_and_field(self):
+        selected_layer = None
+        selected_field = None
+
+        # Get the selected layer and the select field from the comboboxes. Also check if the selected layer and field are valid and selected.
+        if self.layer_combo.currentIndex() < 0:
+            print("No valid layer selected") 
+        elif self.layer_combo.currentIndex() >= 0:
+            selected_layer = self.iface.mapCanvas().layers()[self.layer_combo.currentIndex()]  
+            print(f"Selected layer: {selected_layer.name()}")
+            if self.field_combo.currentIndex() < 0:
+                print("No valid field selected")
+            elif self.field_combo.currentIndex() >= 0:
+                selected_field = self.field_combo.currentText()
+                print(f"Selected field: {selected_field}")
+        return selected_layer, selected_field
+
+    def check_field_type(self, selected_layer, selected_field):
+        # Check if the selected field from the selected layer is from a datatype as integer.
+        if selected_layer.fields().field(selected_field).type() != 10:
+            print("The selected field is not of type integer")
+        
+    def check_editing_mode(self, selected_layer):
+        # Check if the Toggle Editing mode is enabled for the selected layer. Retrun a message if not.
+        if not selected_layer.isEditable():
+            print("The selected layer is not in editing mode. Please enable the editing mode for the selected layer.")
+    
+
+
+
+
 
     def unload(self):
         self.iface.mainWindow().removeToolBar(self.toolbar)
         self.toolbar.clear()
         if self.toolbar is not None:
             self.toolbar.deleteLater()
+        
+        # Reset the map tool when the plugin is unloaded
+        self.map_canvas.unsetMapTool(self.tool)
 
 
 
