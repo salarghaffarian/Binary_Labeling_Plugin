@@ -4,11 +4,15 @@ from qgis.PyQt.QtWidgets import QToolBar, QToolButton, QAction, QMenu, QGroupBox
 from qgis.PyQt.QtGui import QIcon
 from qgis.core import Qgis, QgsFeatureRequest, QgsRectangle
 from qgis.PyQt.QtCore import Qt
-from qgis.gui import QgsMapToolEmitPoint
+from qgis.gui import QgsMapToolEmitPoint, QgsMapTool, QgsMapToolPan
 
 # TODO: Add the functionality to the plugin which syncs the added or removed fields to be reflected on the select field combobox.
 # TODO: Reflect the added or removed feature to the layer in the field combo box.
-# TODO: During the Labeling process, if I activate the identify tool, or some tool like pan tool, and then activate the labeling tool, the labeling does not work properly and act like the tool that was activated between the labeling tool.
+# TODO: When the action button 1 or 1 is checked, if the curser is clicked on somewhere other than the feature, there is an error is raised.
+# The error is message is as follows:
+            #       File "C:\Users/salar/AppData/Roaming/QGIS/QGIS3\profiles\default/python/plugins\BinaryLabelingPlugin\binary_labeling_plugin.py", line 289, in handle_canvas_click
+            #   print(f"list_features = {list_features[0].attributes()}")
+            #  IndexError: list index out of ranges                 >>> the error might because of the list_features is empty since the cursor is clicked on somewhere other than a feature.
 
 # Plugin:
 class BinaryLabelingPlugin:
@@ -18,7 +22,8 @@ class BinaryLabelingPlugin:
         self.active_button = None
         self.map_canvas = self.iface.mapCanvas()  # Get a reference to the map canvas
         self.tool = QgsMapToolEmitPoint(self.map_canvas)
-        self.tool.canvasClicked.connect(self.handle_canvas_click)
+        # self.tool.canvasClicked.connect(self.handle_canvas_click)
+        self.default_tool = QgsMapToolPan(self.map_canvas)
 
     def initGui(self):
         # Set the map tool when the plugin is loaded
@@ -28,6 +33,7 @@ class BinaryLabelingPlugin:
         self.toolbar = QToolBar("Binary Labeling Toolbar")
         self.toolbar.setObjectName("Binary Labeling Toolbar")
         self.iface.addToolBar(self.toolbar)
+
 
         # Get toolbar's icons file paths
         self.settings_icon_path = os.path.join(os.path.dirname(__file__), "media/settings.png")
@@ -61,9 +67,6 @@ class BinaryLabelingPlugin:
         # Connect the currentIndexChanged signal of the layer_combo combobox to the field_combo_populate slot
         self.layer_combo.currentIndexChanged.connect(self.field_combo_populate)
 
-        # Deactivate the action buttons if one of the other toolbar buttons is activated from the main window
-        self.if_other_toolbar_buttons_activated()
-
         # Add the toolbar to the main window
         self.iface.addToolBar(self.toolbar)
 
@@ -88,10 +91,13 @@ class BinaryLabelingPlugin:
         # Set the cursor to cross cursor if one of the action buttons is checked, otherwise set it to arrow cursor
         if self.action_button1.isChecked() or self.action_button2.isChecked():
             self.map_canvas.setCursor(Qt.CrossCursor)
-            self.deactivate_other_toolbar_buttons()
+            self.tool.canvasClicked.connect(self.handle_canvas_click)
+            self.map_canvas.setMapTool(self.tool)
 
         if not self.action_button1.isChecked() and not self.action_button2.isChecked():
             self.map_canvas.setCursor(Qt.ArrowCursor)
+            self.map_canvas.setMapTool(self.default_tool)
+            self.iface.actionPan().setChecked(True)
         
 
     def on_action_button2_triggered(self):
@@ -101,12 +107,14 @@ class BinaryLabelingPlugin:
         # Set the cursor to cross cursor if one of the action buttons is checked, otherwise set it to arrow cursor
         if self.action_button1.isChecked() or self.action_button2.isChecked():
             self.map_canvas.setCursor(Qt.CrossCursor)
-            self.deactivate_other_toolbar_buttons()
+            self.tool.canvasClicked.connect(self.handle_canvas_click)
+            self.map_canvas.setMapTool(self.tool)
 
         if not self.action_button1.isChecked() and not self.action_button2.isChecked():
             self.map_canvas.setCursor(Qt.ArrowCursor)
-            
-        
+            self.map_canvas.setMapTool(self.default_tool)
+            self.iface.actionPan().setChecked(True)
+     
     
     def deactivate_other_toolbar_buttons(self):
         # List of action object names to exclude
@@ -119,17 +127,16 @@ class BinaryLabelingPlugin:
                     if action.isCheckable() and action.isChecked():
                         if action.objectName() not in exclude_actions:
                             action.setChecked(False)
+                            
     
     def deactivate_action_buttons(self):
         self.action_button1.setChecked(False)
         self.action_button2.setChecked(False)
 
-    def if_other_toolbar_buttons_activated(self):
-        list_of_toolbar_buttons = ['mActionToggleEditing', 'toolboxAction', 'mActionShowPythonDialog', 'mActionIdentify']
-        for action_name in list_of_toolbar_buttons:
-            action = self.iface.mainWindow().findChild(QAction, action_name)
-            if action:
-                action.triggered.connect(self.deactivate_action_buttons)
+
+    def on_other_toolbar_buttons_clicked(self):
+        # Create a new map tool
+        new_map_tool = QgsMapToolPan(self.iface.map_canvas)
                 
     def layer_combo_update(self):
         # Clear the layer combo box
@@ -197,8 +204,6 @@ class BinaryLabelingPlugin:
             self.field_combo.addItems([field.name() for field in selected_layer.fields()])
                         
     def handle_canvas_click(self, point, button):
-        # first deactivate other toolbar buttons
-        self.deactivate_other_toolbar_buttons()
 
         if self.action_button1.isChecked() and button == Qt.LeftButton:                              # if the action_button1 is checked and the left mouse button is clicked
             label = 1
