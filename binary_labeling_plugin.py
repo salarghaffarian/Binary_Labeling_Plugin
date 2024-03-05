@@ -14,6 +14,9 @@ from qgis.gui import QgsMapToolEmitPoint, QgsMapTool, QgsMapToolPan
             #   print(f"list_features = {list_features[0].attributes()}")
             #  IndexError: list index out of ranges                 >>> the error might because of the list_features is empty since the cursor is clicked on somewhere other than a feature.
 
+# TODO: Create shortcuts for the action buttons. For example, the action button 1 can be assigned to the key "Y" and the action button 2 can be assigned to the key "N".
+# TODO: Check if the shortcuts are working properly with other shortcuts in QGIS. For example, if the action button 1 is assigned to the key "Y", then the "Y" key should not be used for other shortcuts in QGIS.
+
 # Plugin:
 class BinaryLabelingPlugin:
     
@@ -22,7 +25,7 @@ class BinaryLabelingPlugin:
         self.active_button = None
         self.map_canvas = self.iface.mapCanvas()  # Get a reference to the map canvas
         self.tool = QgsMapToolEmitPoint(self.map_canvas)
-        # self.tool.canvasClicked.connect(self.handle_canvas_click)
+        self.tool.canvasClicked.connect(self.handle_canvas_click)
         self.default_tool = QgsMapToolPan(self.map_canvas)
 
     def initGui(self):
