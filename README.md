@@ -30,17 +30,11 @@ Enhance your QGIS experience with the Binary Labeling Plugin, a powerful toolbar
 Navigate seamlessly through the toolbar, adorned with clear icons for straightforward usage. Here's a quick guide to the icons:
 
 <!-- HTML syntax for images with width attribute -->
-<img src="https://github.com/salarghaffarian/Binary_Labeling_Plugin/blob/main/media/settings.png" alt="Settings Icon" width="40" />
+<img src="https://github.com/salarghaffarian/Binary_Labeling_Plugin/blob/main/media/settings.png" alt="Settings Icon" width="40" /> Settings Icon: Click to access customizable settings for vector layers and fields.
 
-Settings Icon: Click to access customizable settings for vector layers and fields.
+<img src="https://github.com/salarghaffarian/Binary_Labeling_Plugin/blob/main/media/label_1.png" alt="Label 1 Icon" width="40" /> Label 1 Icon: Represents the action button for assigning the label '1' to vector objects.
 
-<img src="https://github.com/salarghaffarian/Binary_Labeling_Plugin/blob/main/media/label_1.png" alt="Label 1 Icon" width="40" />
-
-Label 1 Icon: Represents the action button for assigning the label '1' to vector objects.
-
-<img src="https://github.com/salarghaffarian/Binary_Labeling_Plugin/blob/main/media/label_0.png" alt="Label 0 Icon" width="40" />
-
-Label 0 Icon: Represents the action button for assigning the label '0' to vector objects.
+<img src="https://github.com/salarghaffarian/Binary_Labeling_Plugin/blob/main/media/label_0.png" alt="Label 0 Icon" width="40" /> Label 0 Icon: Represents the action button for assigning the label '0' to vector objects.
 
 ## Known Issues 🚧
 
