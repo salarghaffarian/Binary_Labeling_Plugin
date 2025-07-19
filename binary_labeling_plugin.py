@@ -2,7 +2,7 @@
 import os 
 from qgis.PyQt.QtWidgets import QToolBar, QToolButton, QAction, QMenu, QGroupBox, QLabel, QComboBox, QHBoxLayout, QVBoxLayout
 from qgis.PyQt.QtGui import QIcon
-from qgis.core import Qgis, QgsFeatureRequest, QgsRectangle
+from qgis.core import Qgis, QgsFeatureRequest, QgsRectangle, QgsVectorLayer, QgsMapLayerType
 from qgis.PyQt.QtCore import Qt
 from qgis.gui import QgsMapToolEmitPoint, QgsMapTool, QgsMapToolPan
 
@@ -27,6 +27,7 @@ class BinaryLabelingPlugin:
         self.tool = QgsMapToolEmitPoint(self.map_canvas)
         self.tool.canvasClicked.connect(self.handle_canvas_click)
         self.default_tool = QgsMapToolPan(self.map_canvas)
+        self.vector_layers = []  # Store filtered vector layers
 
     def initGui(self):
         # Set the map tool when the plugin is loaded
@@ -36,7 +37,6 @@ class BinaryLabelingPlugin:
         self.toolbar = QToolBar("Binary Labeling Toolbar")
         self.toolbar.setObjectName("Binary Labeling Toolbar")
         self.iface.addToolBar(self.toolbar)
-
 
         # Get toolbar's icons file paths
         self.settings_icon_path = os.path.join(os.path.dirname(__file__), "media/settings.png")
@@ -66,8 +66,8 @@ class BinaryLabelingPlugin:
         # Connect to signals for dynamically added or removed layers
         self.map_canvas.layersChanged.connect(self.layer_combo_update)
         
-        # TODO: Check if the connection is correct between the layer_combo and the field_combo_populate method.
         # Connect the currentIndexChanged signal of the layer_combo combobox to the field_combo_populate slot
+        # Note: This will be managed in layer_combo_update to prevent issues
         self.layer_combo.currentIndexChanged.connect(self.field_combo_populate)
 
         # Add the toolbar to the main window
@@ -102,7 +102,6 @@ class BinaryLabelingPlugin:
             self.map_canvas.setMapTool(self.default_tool)
             self.iface.actionPan().setChecked(True)
         
-
     def on_action_button2_triggered(self):
         if self.action_button1.isChecked():
             self.action_button1.setChecked(False)
@@ -118,7 +117,6 @@ class BinaryLabelingPlugin:
             self.map_canvas.setMapTool(self.default_tool)
             self.iface.actionPan().setChecked(True)
      
-    
     def deactivate_other_toolbar_buttons(self):
         # List of action object names to exclude
         exclude_actions = ['mActionToggleEditing', 'toolboxAction', 'mActionShowPythonDialog']
@@ -131,24 +129,55 @@ class BinaryLabelingPlugin:
                         if action.objectName() not in exclude_actions:
                             action.setChecked(False)
                             
-    
     def deactivate_action_buttons(self):
         self.action_button1.setChecked(False)
         self.action_button2.setChecked(False)
-
 
     def on_other_toolbar_buttons_clicked(self):
         # Create a new map tool
         new_map_tool = QgsMapToolPan(self.iface.map_canvas)
                 
+    def get_vector_layers(self):
+        """Safely get only vector layers from the map canvas"""
+        vector_layers = []
+        try:
+            all_layers = self.iface.mapCanvas().layers()
+            for layer in all_layers:
+                if hasattr(layer, 'type') and hasattr(layer, 'fields'):
+                    # Additional check to ensure it has the fields() method
+                    if (isinstance(layer, QgsVectorLayer) and 
+                        layer.type() == QgsMapLayerType.VectorLayer and
+                        callable(getattr(layer, 'fields', None))):
+                        vector_layers.append(layer)
+        except Exception as e:
+            print(f"Error getting vector layers: {e}")
+        return vector_layers
+
     def layer_combo_update(self):
+        # Temporarily disconnect the signal to prevent recursive calls
+        try:
+            self.layer_combo.currentIndexChanged.disconnect()
+        except:
+            pass  # Signal might not be connected yet
+        
         # Clear the layer combo box
         self.layer_combo.clear()
 
-        # Add the names of the vector layers to the layer_combo
-        self.layer_combo.addItems([layer.name() for layer in self.iface.mapCanvas().layers() if layer.type() == 0])
+        # Get only vector layers using the safe method
+        self.vector_layers = self.get_vector_layers()
+        
+        print(f"Found {len(self.vector_layers)} vector layers")
+        for layer in self.vector_layers:
+            print(f"Vector layer: {layer.name()}")
 
-        # Call the field_combo_populate method to populate the field combo box with the field names of the selected layer
+        # Add the names of the vector layers to the layer_combo
+        if self.vector_layers:
+            self.layer_combo.addItems([layer.name() for layer in self.vector_layers])
+
+        # Reconnect the signal
+        self.layer_combo.currentIndexChanged.connect(self.field_combo_populate)
+        
+        # Call the field_combo_populate method only if we have vector layers
         self.field_combo_populate()
         
     def create_settings_menu(self):
@@ -163,7 +192,12 @@ class BinaryLabelingPlugin:
         self.layer_label = QLabel("Select a layer:", self.group_box)
         self.layer_combo = QComboBox(self.group_box)
         self.layer_combo.setMinimumWidth(400)
-        self.layer_combo.addItems([layer.name() for layer in self.iface.mapCanvas().layers() if layer.type() == 0])
+        
+        # Initialize vector_layers and populate combo
+        self.vector_layers = self.get_vector_layers()
+        
+        if self.vector_layers:
+            self.layer_combo.addItems([layer.name() for layer in self.vector_layers])
         self.layer_combo.setCurrentIndex(-1)
         
         # Creat QHBox Layout for the layer label & layer combobox.
@@ -197,14 +231,27 @@ class BinaryLabelingPlugin:
     def field_combo_populate(self):
         # Clear the field combo box
         self.field_combo.clear()
+        
+        print(f"field_combo_populate called. Current index: {self.layer_combo.currentIndex()}, Vector layers count: {len(self.vector_layers)}")
 
-        # Check if there is a valid selection in the layer_combo
-        if self.layer_combo.currentIndex() >= 0:
-            # Get the selected layer
-            selected_layer = self.iface.mapCanvas().layers()[self.layer_combo.currentIndex()]
-
-            # Add the field names to the field combo box (self.field_combo)
-            self.field_combo.addItems([field.name() for field in selected_layer.fields()])
+        # Check if there is a valid selection in the layer_combo and we have vector layers
+        if (self.layer_combo.currentIndex() >= 0 and 
+            len(self.vector_layers) > 0 and
+            self.layer_combo.currentIndex() < len(self.vector_layers)):
+            
+            # Get the selected layer from the stored vector_layers list
+            selected_layer = self.vector_layers[self.layer_combo.currentIndex()]
+            print(f"Selected layer: {selected_layer.name()}, Type: {type(selected_layer).__name__}")
+            
+            # Double-check that this is indeed a vector layer
+            if isinstance(selected_layer, QgsVectorLayer) and selected_layer.type() == QgsMapLayerType.VectorLayer:
+                # Add the field names to the field combo box (self.field_combo)
+                self.field_combo.addItems([field.name() for field in selected_layer.fields()])
+                print(f"Added {len(selected_layer.fields())} fields to combo")
+            else:
+                print(f"Warning: Layer {selected_layer.name()} is not a vector layer")
+        else:
+            print("No valid layer selection or no vector layers available")
                         
     def handle_canvas_click(self, point, button):
 
@@ -226,14 +273,14 @@ class BinaryLabelingPlugin:
                         features = selected_layer.getFeatures(request)
                         list_features = list(features)
                         print(f"lenght of features = {len(list_features)}")
-                        print(f"list_features = {list_features[0].attributes()}")
-                        # Check if any features were identified
+                        
+                        # Fix for the IndexError - check if list_features is not empty before accessing
                         if list_features:
+                            print(f"list_features = {list_features[0].attributes()}")
                             # Get the first identified feature
                             selected_layer.startEditing()          # Start editing the layer
                             for feature in list_features:
                                 selected_layer.changeAttributeValue(feature.id(), selected_layer.fields().indexFromName(selected_field), label)
-                            
                             
                             selected_layer.commitChanges()            # Commit the changes to the layer
                             selected_layer.startEditing()              # Stop editing the layer
@@ -244,7 +291,7 @@ class BinaryLabelingPlugin:
                     elif not selected_layer.isEditable():
                         self.iface.messageBar().pushMessage("Editing mode is off", f"The selected layer is not in editing mode. Please enable the editing mode for the selected layer={selected_layer}.", level=Qgis.Warning)
                 else:
-                    self.iface.messageBar().pushMesage("Field type is not integer", f"The selected field: {selected_field} is not of type integer. Please select a field of type integer.", level=Qgis.Warning)
+                    self.iface.messageBar().pushMessage("Field type is not integer", f"The selected field: {selected_field} is not of type integer. Please select a field of type integer.", level=Qgis.Warning)
             else:
                 self.iface.messageBar().pushMessage("No valid layer or field selected", "Please select a valid layer and field.", level=Qgis.Warning)
 
@@ -265,14 +312,14 @@ class BinaryLabelingPlugin:
                         features = selected_layer.getFeatures(request)
                         list_features = list(features)
                         print(f"lenght of features = {len(list_features)}")
-                        print(f"list_features = {list_features[0].attributes()}")
-                        # Check if any features were identified
+                        
+                        # Fix for the IndexError - check if list_features is not empty before accessing
                         if list_features:
+                            print(f"list_features = {list_features[0].attributes()}")
                             # Get the first identified feature
                             selected_layer.startEditing()          # Start editing the layer
                             for feature in list_features:
                                 selected_layer.changeAttributeValue(feature.id(), selected_layer.fields().indexFromName(selected_field), label)
-                            
                             
                             selected_layer.commitChanges()            # Commit the changes to the layer
                             selected_layer.startEditing()              # Stop editing the layer
@@ -283,7 +330,7 @@ class BinaryLabelingPlugin:
                     elif not selected_layer.isEditable():
                         self.iface.messageBar().pushMessage("Editing mode is off", f"The selected layer is not in editing mode. Please enable the editing mode for the selected layer={selected_layer}.", level=Qgis.Warning)
                 else:
-                    self.iface.messageBar().pushMesage("Field type is not integer", f"The selected field: {selected_field} is not of type integer. Please select a field of type integer.", level=Qgis.Warning)
+                    self.iface.messageBar().pushMessage("Field type is not integer", f"The selected field: {selected_field} is not of type integer. Please select a field of type integer.", level=Qgis.Warning)
             else:
                 self.iface.messageBar().pushMessage("No valid layer or field selected", "Please select a valid layer and field.", level=Qgis.Warning)
 
@@ -294,8 +341,16 @@ class BinaryLabelingPlugin:
         # Get the selected layer and the select field from the comboboxes. Also check if the selected layer and field are valid and selected.
         if self.layer_combo.currentIndex() < 0:
             self.iface.messageBar().pushMessage("No valid layer selected", "Please select a valid layer.", level=Qgis.Warning) 
-        elif self.layer_combo.currentIndex() >= 0:
-            selected_layer = self.iface.mapCanvas().layers()[self.layer_combo.currentIndex()]  
+        elif (self.layer_combo.currentIndex() >= 0 and 
+              self.layer_combo.currentIndex() < len(self.vector_layers) and 
+              len(self.vector_layers) > 0):
+            
+            selected_layer = self.vector_layers[self.layer_combo.currentIndex()]  # Use stored vector_layers list
+            
+            # Double-check that this is indeed a vector layer
+            if not (isinstance(selected_layer, QgsVectorLayer) and selected_layer.type() == QgsMapLayerType.VectorLayer):
+                self.iface.messageBar().pushMessage("Invalid layer type", "Selected layer is not a vector layer.", level=Qgis.Warning)
+                return None, None
             
             if self.field_combo.currentIndex() < 0:
                 self.iface.messageBar().pushMessage("No valid field selected", "Please select a valid field.", level=Qgis.Warning) 
@@ -314,7 +369,6 @@ class BinaryLabelingPlugin:
         if not selected_layer.isEditable():
             print("The selected layer is not in editing mode. Please enable the editing mode for the selected layer.")
     
-
     def unload(self):
         self.iface.mainWindow().removeToolBar(self.toolbar)
         self.toolbar.clear()
@@ -323,9 +377,3 @@ class BinaryLabelingPlugin:
         
         # Reset the map tool when the plugin is unloaded
         self.map_canvas.unsetMapTool(self.tool)
-
-
-
-
-
-            
